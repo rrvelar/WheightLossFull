@@ -1,11 +1,45 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { ethers } from "ethers";
 
-// Адрес и ABI контракта
-const CONTRACT_ADDRESS = "0xDe65B2b24558Ef18B923D31E9E6be966b9e3b0Bd";
-const ABI = [
-  "function addEntry(uint16 weightKg, uint32 steps, uint16 caloriesIn, uint16 caloriesOut, string note) external",
-  "function getMyEntries() view returns (tuple(uint256 timestamp, uint16 weightKg, uint32 steps, uint16 caloriesIn, uint16 caloriesOut, string note)[])"
+// Адрес твоего контракта в сети Base
+const contractAddress = "0xDe65B2b24558Ef18B923D31E9E6be966b9e3b0Bd";
+
+// ABI контракта (упрощённо)
+const abi = [
+  {
+    inputs: [
+      { internalType: "uint16", name: "weightKg", type: "uint16" },
+      { internalType: "uint32", name: "steps", type: "uint32" },
+      { internalType: "uint16", name: "caloriesIn", type: "uint16" },
+      { internalType: "uint16", name: "caloriesOut", type: "uint16" },
+      { internalType: "string", name: "note", type: "string" }
+    ],
+    name: "addEntry",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function"
+  },
+  {
+    inputs: [],
+    name: "getMyEntries",
+    outputs: [
+      {
+        components: [
+          { internalType: "uint256", name: "timestamp", type: "uint256" },
+          { internalType: "uint16", name: "weightKg", type: "uint16" },
+          { internalType: "uint32", name: "steps", type: "uint32" },
+          { internalType: "uint16", name: "caloriesIn", type: "uint16" },
+          { internalType: "uint16", name: "caloriesOut", type: "uint16" },
+          { internalType: "string", name: "note", type: "string" }
+        ],
+        internalType: "struct WeightLossDiary.Entry[]",
+        name: "",
+        type: "tuple[]"
+      }
+    ],
+    stateMutability: "view",
+    type: "function"
+  }
 ];
 
 export default function App() {
@@ -14,8 +48,7 @@ export default function App() {
   const [contract, setContract] = useState(null);
   const [address, setAddress] = useState(null);
   const [entries, setEntries] = useState([]);
-
-  const [formData, setFormData] = useState({
+  const [form, setForm] = useState({
     weightKg: "",
     steps: "",
     caloriesIn: "",
@@ -23,129 +56,100 @@ export default function App() {
     note: ""
   });
 
-  useEffect(() => {
-    if (contract && address) {
-      loadEntries();
-    }
-  }, [contract, address]);
-
-  async function connectWallet() {
+  const connectWallet = async () => {
     if (!window.ethereum) {
       alert("Установите MetaMask");
       return;
     }
 
-    const provider = new ethers.providers.Web3Provider(window.ethereum);
-    const { chainId } = await provider.getNetwork();
-    if (chainId !== 8453) {
+    const chainId = await window.ethereum.request({ method: "eth_chainId" });
+    if (chainId !== "0x2105") {
       alert("Пожалуйста, переключитесь на сеть Base (Chain ID 8453)");
       return;
     }
 
-    await provider.send("eth_requestAccounts", []);
-    const signer = provider.getSigner();
-    const address = await signer.getAddress();
-    const contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
+    const newProvider = new ethers.providers.Web3Provider(window.ethereum);
+    const newSigner = newProvider.getSigner();
+    const newAddress = await newSigner.getAddress();
+    const newContract = new ethers.Contract(contractAddress, abi, newSigner);
 
-    setProvider(provider);
-    setSigner(signer);
-    setContract(contract);
-    setAddress(address);
-  }
+    setProvider(newProvider);
+    setSigner(newSigner);
+    setAddress(newAddress);
+    setContract(newContract);
 
-  async function loadEntries() {
-    try {
-      const data = await contract.getMyEntries();
-      setEntries(data);
-    } catch (err) {
-      console.error("Ошибка загрузки записей:", err);
-    }
-  }
+    const data = await newContract.getMyEntries();
+    setEntries(data);
+  };
 
-  async function handleSubmit(e) {
+  const handleChange = (e) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    const { weightKg, steps, caloriesIn, caloriesOut, note } = formData;
+    if (!contract) return;
+
     try {
       const tx = await contract.addEntry(
-        parseInt(weightKg),
-        parseInt(steps),
-        parseInt(caloriesIn),
-        parseInt(caloriesOut),
-        note
+        parseInt(form.weightKg),
+        parseInt(form.steps),
+        parseInt(form.caloriesIn),
+        parseInt(form.caloriesOut),
+        form.note
       );
       await tx.wait();
-      await loadEntries();
-      setFormData({
-        weightKg: "",
-        steps: "",
-        caloriesIn: "",
-        caloriesOut: "",
-        note: ""
-      });
+      const updated = await contract.getMyEntries();
+      setEntries(updated);
+      setForm({ weightKg: "", steps: "", caloriesIn: "", caloriesOut: "", note: "" });
     } catch (err) {
-      console.error("Ошибка отправки:", err);
+      console.error("Ошибка при добавлении записи:", err);
     }
-  }
+  };
 
   return (
-    <div style={{ padding: "2rem" }}>
+    <div style={{ padding: "2rem", fontFamily: "Arial, sans-serif" }}>
       <h1>Weight Loss Diary</h1>
+
       {!address ? (
         <button onClick={connectWallet}>Подключить MetaMask</button>
       ) : (
         <>
-          <p>Wallet: {address}</p>
+          <p>Кошелек: {address}</p>
 
-          <form onSubmit={handleSubmit} style={{ marginBottom: "2rem" }}>
-            <input
-              placeholder="Вес (кг)"
-              type="number"
-              value={formData.weightKg}
-              onChange={(e) => setFormData({ ...formData, weightKg: e.target.value })}
-              required
-            />
-            <input
-              placeholder="Шаги"
-              type="number"
-              value={formData.steps}
-              onChange={(e) => setFormData({ ...formData, steps: e.target.value })}
-              required
-            />
-            <input
-              placeholder="Калории потребленные"
-              type="number"
-              value={formData.caloriesIn}
-              onChange={(e) => setFormData({ ...formData, caloriesIn: e.target.value })}
-              required
-            />
-            <input
-              placeholder="Калории потраченные"
-              type="number"
-              value={formData.caloriesOut}
-              onChange={(e) => setFormData({ ...formData, caloriesOut: e.target.value })}
-              required
-            />
-            <input
-              placeholder="Заметка"
-              type="text"
-              value={formData.note}
-              maxLength="200"
-              onChange={(e) => setFormData({ ...formData, note: e.target.value })}
-            />
-            <button type="submit">Добавить запись</button>
+          <h2>Добавить запись</h2>
+          <form onSubmit={handleSubmit}>
+            <div>
+              Вес (кг): <input name="weightKg" value={form.weightKg} onChange={handleChange} />
+            </div>
+            <div>
+              Шаги: <input name="steps" value={form.steps} onChange={handleChange} />
+            </div>
+            <div>
+              Калории получено: <input name="caloriesIn" value={form.caloriesIn} onChange={handleChange} />
+            </div>
+            <div>
+              Калории потрачено: <input name="caloriesOut" value={form.caloriesOut} onChange={handleChange} />
+            </div>
+            <div>
+              Комментарий: <input name="note" value={form.note} onChange={handleChange} />
+            </div>
+            <button type="submit">Добавить</button>
           </form>
 
-          <h2>Your Entries:</h2>
-          {entries.length === 0 && <p>Нет записей</p>}
-          {entries.map((entry, index) => (
-            <div key={index}>
-              <p>{new Date(entry.timestamp * 1000).toLocaleString()}</p>
-              <p>Вес: {entry.weightKg} кг, Шаги: {entry.steps}</p>
-              <p>Калории: {entry.caloriesIn} in / {entry.caloriesOut} out</p>
-              <p>Заметка: {entry.note}</p>
-              <hr />
-            </div>
-          ))}
+          <h2>Ваши записи</h2>
+          {entries.length === 0 ? (
+            <p>Записей пока нет.</p>
+          ) : (
+            <ul>
+              {entries.map((entry, i) => (
+                <li key={i}>
+                  {new Date(entry.timestamp * 1000).toLocaleString()}: {entry.weightKg} кг, {entry.steps} шагов,
+                  калории: +{entry.caloriesIn} / -{entry.caloriesOut}, заметка: {entry.note}
+                </li>
+              ))}
+            </ul>
+          )}
         </>
       )}
     </div>

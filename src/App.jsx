@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
-import { ethers } from "ethers";
 
-const CONTRACT_ADDRESS = "0xDe65B2b24558Ef18B923D31E9E6be966b9e3b0Bd";
-const CONTRACT_ABI = [
+import React, { useState, useEffect } from "react";
+import { BrowserProvider, Contract } from "ethers";
+
+// ABI из твоего контракта
+const contractABI = [
   {
     "inputs": [],
     "name": "getMyEntries",
@@ -39,96 +40,58 @@ const CONTRACT_ABI = [
   }
 ];
 
-export default function App() {
-  const [account, setAccount] = useState(null);
-  const [contract, setContract] = useState(null);
-  const [entries, setEntries] = useState([]);
-  const [form, setForm] = useState({
-    weightKg: "",
-    steps: "",
-    caloriesIn: "",
-    caloriesOut: "",
-    note: ""
-  });
+const contractAddress = "0xDe65B2b24558Ef18B923D31E9E6be966b9e3b0Bd";
+const BASE_CHAIN_ID = 8453;
 
-  useEffect(() => {
-    if (typeof window.ethereum !== "undefined") {
-      window.ethereum.on("accountsChanged", () => window.location.reload());
-      window.ethereum.on("chainChanged", () => window.location.reload());
-    }
-  }, []);
+export default function App() {
+  const [provider, setProvider] = useState(null);
+  const [account, setAccount] = useState(null);
+  const [entries, setEntries] = useState([]);
 
   const connectWallet = async () => {
-    if (!window.ethereum) return alert("MetaMask не найден");
-    const provider = new ethers.providers.Web3Provider(window.ethereum);
-    const chainId = await provider.getNetwork();
-    if (chainId.chainId !== 8453) {
+    if (!window.ethereum) return alert("MetaMask not found");
+
+    const provider = new BrowserProvider(window.ethereum);
+    const network = await provider.getNetwork();
+    if (Number(network.chainId) !== BASE_CHAIN_ID) {
       alert("Пожалуйста, переключитесь на сеть Base (Chain ID 8453)");
       return;
     }
+
     const accounts = await provider.send("eth_requestAccounts", []);
+    setProvider(provider);
     setAccount(accounts[0]);
-
-    const signer = provider.getSigner();
-    const contractInstance = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
-    setContract(contractInstance);
-
-    const userEntries = await contractInstance.getMyEntries();
-    setEntries(userEntries);
   };
 
-  const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
-  };
+  useEffect(() => {
+    const fetchEntries = async () => {
+      if (!provider || !account) return;
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      const tx = await contract.addEntry(
-        parseInt(form.weightKg),
-        parseInt(form.steps),
-        parseInt(form.caloriesIn),
-        parseInt(form.caloriesOut),
-        form.note
-      );
-      await tx.wait();
-      const updatedEntries = await contract.getMyEntries();
-      setEntries(updatedEntries);
-    } catch (err) {
-      console.error(err);
-      alert("Ошибка при добавлении записи");
-    }
-  };
+      const signer = await provider.getSigner();
+      const contract = new Contract(contractAddress, contractABI, signer);
+      const userEntries = await contract.getMyEntries();
+      setEntries(userEntries);
+    };
+
+    fetchEntries();
+  }, [provider, account]);
 
   return (
-    <div style={{ padding: 20 }}>
+    <div>
       <h1>Weight Loss Diary</h1>
       {!account ? (
         <button onClick={connectWallet}>Подключить MetaMask</button>
       ) : (
         <>
           <p>Wallet: {account}</p>
-
-          <form onSubmit={handleSubmit} style={{ marginBottom: 30 }}>
-            <input name="weightKg" type="number" placeholder="Вес (кг)" value={form.weightKg} onChange={handleChange} required />
-            <input name="steps" type="number" placeholder="Шаги" value={form.steps} onChange={handleChange} required />
-            <input name="caloriesIn" type="number" placeholder="Калорий потреблено" value={form.caloriesIn} onChange={handleChange} required />
-            <input name="caloriesOut" type="number" placeholder="Калорий сожжено" value={form.caloriesOut} onChange={handleChange} required />
-            <input name="note" type="text" placeholder="Комментарий" value={form.note} onChange={handleChange} required />
-            <button type="submit">Добавить запись</button>
-          </form>
-
-          <h2>Ваши записи:</h2>
-          {entries.map((entry, index) => (
-            <div key={index} style={{ marginBottom: 10 }}>
-              <div>Дата: {new Date(entry.timestamp * 1000).toLocaleString()}</div>
-              <div>Вес: {entry.weightKg} кг</div>
-              <div>Шаги: {entry.steps}</div>
-              <div>Калорий In: {entry.caloriesIn}, Out: {entry.caloriesOut}</div>
-              <div>Заметка: {entry.note}</div>
-              <hr />
-            </div>
-          ))}
+          <h2>Your Entries:</h2>
+          <ul>
+            {entries.map((e, idx) => (
+              <li key={idx}>
+                {new Date(Number(e.timestamp) * 1000).toLocaleDateString()} - Вес: {e.weightKg} кг, Шаги: {e.steps}, Калории: {e.caloriesIn} / {e.caloriesOut}, Заметка: {e.note}
+              </li>
+            ))}
+          </ul>
         </>
       )}
     </div>

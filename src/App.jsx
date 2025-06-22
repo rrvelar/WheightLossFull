@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { ethers } from "ethers";
-import contractABI from "./abi.json";
+import contractABI from "../abi.json";
 
 const CONTRACT_ADDRESS = "0xDe65B2b24558Ef18B923D31E9E6be966b9e3b0Bd";
 

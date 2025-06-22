@@ -1,10 +1,9 @@
-
 import { useEffect, useState } from "react";
 import { ethers } from "ethers";
 
-// Адрес и ABI твоего контракта
-const contractAddress = "0xDe65B2b24558Ef18B923D31E9E6be966b9e3b0Bd";
-const abi = [
+// адрес и ABI контракта
+const CONTRACT_ADDRESS = "0xDe65B2b24558Ef18B923D31E9E6be966b9e3b0Bd";
+const CONTRACT_ABI = [
   {
     "inputs": [],
     "name": "getMyEntries",
@@ -41,11 +40,9 @@ const abi = [
   }
 ];
 
-function App() {
-  const [provider, setProvider] = useState(null);
-  const [signer, setSigner] = useState(null);
+export default function App() {
+  const [account, setAccount] = useState(null);
   const [contract, setContract] = useState(null);
-  const [address, setAddress] = useState(null);
   const [entries, setEntries] = useState([]);
   const [form, setForm] = useState({
     weightKg: "",
@@ -55,81 +52,86 @@ function App() {
     note: ""
   });
 
-  async function connectWallet() {
-    if (!window.ethereum) {
-      alert("Установите MetaMask");
-      return;
+  useEffect(() => {
+    if (typeof window.ethereum !== "undefined") {
+      window.ethereum.on("accountsChanged", () => window.location.reload());
+      window.ethereum.on("chainChanged", () => window.location.reload());
     }
+  }, []);
 
+  const connectWallet = async () => {
+    if (!window.ethereum) return alert("MetaMask не найден");
     const provider = new ethers.providers.Web3Provider(window.ethereum);
-    const accounts = await provider.send("eth_requestAccounts", []);
-    const network = await provider.getNetwork();
-
-    if (network.chainId !== 8453) {
+    const chainId = await provider.getNetwork();
+    if (chainId.chainId !== 8453) {
       alert("Пожалуйста, переключитесь на сеть Base (Chain ID 8453)");
       return;
     }
+    const accounts = await provider.send("eth_requestAccounts", []);
+    setAccount(accounts[0]);
 
     const signer = provider.getSigner();
-    const contract = new ethers.Contract(contractAddress, abi, signer);
+    const contractInstance = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
+    setContract(contractInstance);
 
-    setProvider(provider);
-    setSigner(signer);
-    setContract(contract);
-    setAddress(accounts[0]);
+    const userEntries = await contractInstance.getMyEntries();
+    setEntries(userEntries);
+  };
 
-    const entries = await contract.getMyEntries();
-    setEntries(entries);
-  }
+  const handleChange = (e) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
+  };
 
-  async function handleSubmit(e) {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    const tx = await contract.addEntry(
-      Number(form.weightKg),
-      Number(form.steps),
-      Number(form.caloriesIn),
-      Number(form.caloriesOut),
-      form.note
-    );
-    await tx.wait();
-    const updatedEntries = await contract.getMyEntries();
-    setEntries(updatedEntries);
-    setForm({ weightKg: "", steps: "", caloriesIn: "", caloriesOut: "", note: "" });
-  }
+    try {
+      const tx = await contract.addEntry(
+        parseInt(form.weightKg),
+        parseInt(form.steps),
+        parseInt(form.caloriesIn),
+        parseInt(form.caloriesOut),
+        form.note
+      );
+      await tx.wait();
+      const updatedEntries = await contract.getMyEntries();
+      setEntries(updatedEntries);
+    } catch (err) {
+      console.error(err);
+      alert("Ошибка при добавлении записи");
+    }
+  };
 
   return (
     <div style={{ padding: 20 }}>
       <h1>Weight Loss Diary</h1>
-      {!address ? (
+      {!account ? (
         <button onClick={connectWallet}>Подключить MetaMask</button>
       ) : (
         <>
-          <p><strong>Wallet:</strong> {address}</p>
+          <p>Wallet: {account}</p>
 
-          <h2>Добавить запись</h2>
-          <form onSubmit={handleSubmit}>
-            <input placeholder="Вес (кг)" value={form.weightKg} onChange={e => setForm({ ...form, weightKg: e.target.value })} required />
-            <input placeholder="Шаги" value={form.steps} onChange={e => setForm({ ...form, steps: e.target.value })} required />
-            <input placeholder="Калории полученные" value={form.caloriesIn} onChange={e => setForm({ ...form, caloriesIn: e.target.value })} required />
-            <input placeholder="Калории потраченные" value={form.caloriesOut} onChange={e => setForm({ ...form, caloriesOut: e.target.value })} required />
-            <input placeholder="Заметка" value={form.note} onChange={e => setForm({ ...form, note: e.target.value })} />
-            <button type="submit">Сохранить</button>
+          <form onSubmit={handleSubmit} style={{ marginBottom: 30 }}>
+            <input name="weightKg" type="number" placeholder="Вес (кг)" value={form.weightKg} onChange={handleChange} required />
+            <input name="steps" type="number" placeholder="Шаги" value={form.steps} onChange={handleChange} required />
+            <input name="caloriesIn" type="number" placeholder="Калорий потреблено" value={form.caloriesIn} onChange={handleChange} required />
+            <input name="caloriesOut" type="number" placeholder="Калорий сожжено" value={form.caloriesOut} onChange={handleChange} required />
+            <input name="note" type="text" placeholder="Комментарий" value={form.note} onChange={handleChange} required />
+            <button type="submit">Добавить запись</button>
           </form>
 
-          <h2>Ваши записи</h2>
-          {entries.length === 0 ? <p>Нет записей.</p> : (
-            <ul>
-              {entries.map((entry, index) => (
-                <li key={index}>
-                  {new Date(entry.timestamp * 1000).toLocaleDateString()} — Вес: {entry.weightKg} кг, Шаги: {entry.steps}, Калории: +{entry.caloriesIn}/-{entry.caloriesOut}, Заметка: {entry.note}
-                </li>
-              ))}
-            </ul>
-          )}
+          <h2>Ваши записи:</h2>
+          {entries.map((entry, index) => (
+            <div key={index} style={{ marginBottom: 10 }}>
+              <div>Дата: {new Date(entry.timestamp * 1000).toLocaleString()}</div>
+              <div>Вес: {entry.weightKg} кг</div>
+              <div>Шаги: {entry.steps}</div>
+              <div>Калорий In: {entry.caloriesIn}, Out: {entry.caloriesOut}</div>
+              <div>Заметка: {entry.note}</div>
+              <hr />
+            </div>
+          ))}
         </>
       )}
     </div>
   );
 }
-
-export default App;

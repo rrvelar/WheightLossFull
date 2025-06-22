@@ -1,81 +1,12 @@
+
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Weight Loss Diary</title>
-</head>
-<body>
-  <h1>Weight Loss Diary</h1>
-  <button id="connectButton">Подключить MetaMask</button>
-  <p id="wallet">Wallet: </p>
-  <h2>Your Entries:</h2>
-  <ul id="entries"></ul>
-
-  <script type="module">
-    import { ethers } from 'https://esm.sh/ethers@6.5.2';
-
-    const connectButton = document.getElementById("connectButton");
-    const walletDisplay = document.getElementById("wallet");
-    const entriesList = document.getElementById("entries");
-
-    const contractAddress = "0xDe65B2b24558Ef18B923D31E9E6be966b9e3b0Bd";
-    const abi = [
-      {
-        "inputs": [],
-        "name": "getMyEntries",
-        "outputs": [
-          {
-            "components": [
-              { "internalType": "uint256", "name": "timestamp", "type": "uint256" },
-              { "internalType": "uint16", "name": "weightKg", "type": "uint16" },
-              { "internalType": "uint32", "name": "steps", "type": "uint32" },
-              { "internalType": "uint16", "name": "caloriesIn", "type": "uint16" },
-              { "internalType": "uint16", "name": "caloriesOut", "type": "uint16" },
-              { "internalType": "string", "name": "note", "type": "string" }
-            ],
-            "internalType": "struct WeightLossDiary.Entry[]",
-            "name": "",
-            "type": "tuple[]"
-          }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-      }
-    ];
-
-    let provider, signer, contract;
-
-    connectButton.onclick = async () => {
-      if (!window.ethereum) {
-        alert("Установите MetaMask");
-        return;
-      }
-
-      provider = new ethers.BrowserProvider(window.ethereum);
-      const network = await provider.getNetwork();
-      if (network.chainId !== 8453n) {
-        alert("Пожалуйста, переключитесь на сеть Base (Chain ID 8453)");
-        return;
-      }
-
-      const accounts = await provider.send("eth_requestAccounts", []);
-      signer = await provider.getSigner(accounts[0]);
-      walletDisplay.textContent = "Wallet: " + accounts[0];
-
-      contract = new ethers.Contract(contractAddress, abi, provider);
-      loadEntries();
-    };
-
-    async function loadEntries() {
-      const entries = await contract.getMyEntries();
-      entriesList.innerHTML = "";
-      for (const entry of entries) {
-        const li = document.createElement("li");
-        li.textContent = `Дата: ${new Date(entry.timestamp * 1000).toLocaleDateString()}, Вес: ${entry.weightKg} кг, Шаги: ${entry.steps}, Калории: ${entry.caloriesIn}/${entry.caloriesOut}, Заметка: ${entry.note}`;
-        entriesList.appendChild(li);
-      }
-    }
-  </script>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Weight Loss Diary</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
 </html>

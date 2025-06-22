@@ -1,48 +1,47 @@
+
 import { useEffect, useState } from "react";
 import { ethers } from "ethers";
 
-// Адрес твоего контракта в сети Base
+// Адрес и ABI твоего контракта
 const contractAddress = "0xDe65B2b24558Ef18B923D31E9E6be966b9e3b0Bd";
-
-// ABI контракта (упрощённо)
 const abi = [
   {
-    inputs: [
-      { internalType: "uint16", name: "weightKg", type: "uint16" },
-      { internalType: "uint32", name: "steps", type: "uint32" },
-      { internalType: "uint16", name: "caloriesIn", type: "uint16" },
-      { internalType: "uint16", name: "caloriesOut", type: "uint16" },
-      { internalType: "string", name: "note", type: "string" }
-    ],
-    name: "addEntry",
-    outputs: [],
-    stateMutability: "nonpayable",
-    type: "function"
-  },
-  {
-    inputs: [],
-    name: "getMyEntries",
-    outputs: [
+    "inputs": [],
+    "name": "getMyEntries",
+    "outputs": [
       {
-        components: [
-          { internalType: "uint256", name: "timestamp", type: "uint256" },
-          { internalType: "uint16", name: "weightKg", type: "uint16" },
-          { internalType: "uint32", name: "steps", type: "uint32" },
-          { internalType: "uint16", name: "caloriesIn", type: "uint16" },
-          { internalType: "uint16", name: "caloriesOut", type: "uint16" },
-          { internalType: "string", name: "note", type: "string" }
+        "components": [
+          { "internalType": "uint256", "name": "timestamp", "type": "uint256" },
+          { "internalType": "uint16", "name": "weightKg", "type": "uint16" },
+          { "internalType": "uint32", "name": "steps", "type": "uint32" },
+          { "internalType": "uint16", "name": "caloriesIn", "type": "uint16" },
+          { "internalType": "uint16", "name": "caloriesOut", "type": "uint16" },
+          { "internalType": "string", "name": "note", "type": "string" }
         ],
-        internalType: "struct WeightLossDiary.Entry[]",
-        name: "",
-        type: "tuple[]"
+        "internalType": "struct WeightLossDiary.Entry[]",
+        "name": "",
+        "type": "tuple[]"
       }
     ],
-    stateMutability: "view",
-    type: "function"
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "uint16", "name": "weightKg", "type": "uint16" },
+      { "internalType": "uint32", "name": "steps", "type": "uint32" },
+      { "internalType": "uint16", "name": "caloriesIn", "type": "uint16" },
+      { "internalType": "uint16", "name": "caloriesOut", "type": "uint16" },
+      { "internalType": "string", "name": "note", "type": "string" }
+    ],
+    "name": "addEntry",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
   }
 ];
 
-export default function App() {
+function App() {
   const [provider, setProvider] = useState(null);
   const [signer, setSigner] = useState(null);
   const [contract, setContract] = useState(null);
@@ -56,96 +55,73 @@ export default function App() {
     note: ""
   });
 
-  const connectWallet = async () => {
+  async function connectWallet() {
     if (!window.ethereum) {
       alert("Установите MetaMask");
       return;
     }
 
-    const chainId = await window.ethereum.request({ method: "eth_chainId" });
-    if (chainId !== "0x2105") {
+    const provider = new ethers.providers.Web3Provider(window.ethereum);
+    const accounts = await provider.send("eth_requestAccounts", []);
+    const network = await provider.getNetwork();
+
+    if (network.chainId !== 8453) {
       alert("Пожалуйста, переключитесь на сеть Base (Chain ID 8453)");
       return;
     }
 
-    const newProvider = new ethers.providers.Web3Provider(window.ethereum);
-    const newSigner = newProvider.getSigner();
-    const newAddress = await newSigner.getAddress();
-    const newContract = new ethers.Contract(contractAddress, abi, newSigner);
+    const signer = provider.getSigner();
+    const contract = new ethers.Contract(contractAddress, abi, signer);
 
-    setProvider(newProvider);
-    setSigner(newSigner);
-    setAddress(newAddress);
-    setContract(newContract);
+    setProvider(provider);
+    setSigner(signer);
+    setContract(contract);
+    setAddress(accounts[0]);
 
-    const data = await newContract.getMyEntries();
-    setEntries(data);
-  };
+    const entries = await contract.getMyEntries();
+    setEntries(entries);
+  }
 
-  const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
-  };
-
-  const handleSubmit = async (e) => {
+  async function handleSubmit(e) {
     e.preventDefault();
-    if (!contract) return;
-
-    try {
-      const tx = await contract.addEntry(
-        parseInt(form.weightKg),
-        parseInt(form.steps),
-        parseInt(form.caloriesIn),
-        parseInt(form.caloriesOut),
-        form.note
-      );
-      await tx.wait();
-      const updated = await contract.getMyEntries();
-      setEntries(updated);
-      setForm({ weightKg: "", steps: "", caloriesIn: "", caloriesOut: "", note: "" });
-    } catch (err) {
-      console.error("Ошибка при добавлении записи:", err);
-    }
-  };
+    const tx = await contract.addEntry(
+      Number(form.weightKg),
+      Number(form.steps),
+      Number(form.caloriesIn),
+      Number(form.caloriesOut),
+      form.note
+    );
+    await tx.wait();
+    const updatedEntries = await contract.getMyEntries();
+    setEntries(updatedEntries);
+    setForm({ weightKg: "", steps: "", caloriesIn: "", caloriesOut: "", note: "" });
+  }
 
   return (
-    <div style={{ padding: "2rem", fontFamily: "Arial, sans-serif" }}>
+    <div style={{ padding: 20 }}>
       <h1>Weight Loss Diary</h1>
-
       {!address ? (
         <button onClick={connectWallet}>Подключить MetaMask</button>
       ) : (
         <>
-          <p>Кошелек: {address}</p>
+          <p><strong>Wallet:</strong> {address}</p>
 
           <h2>Добавить запись</h2>
           <form onSubmit={handleSubmit}>
-            <div>
-              Вес (кг): <input name="weightKg" value={form.weightKg} onChange={handleChange} />
-            </div>
-            <div>
-              Шаги: <input name="steps" value={form.steps} onChange={handleChange} />
-            </div>
-            <div>
-              Калории получено: <input name="caloriesIn" value={form.caloriesIn} onChange={handleChange} />
-            </div>
-            <div>
-              Калории потрачено: <input name="caloriesOut" value={form.caloriesOut} onChange={handleChange} />
-            </div>
-            <div>
-              Комментарий: <input name="note" value={form.note} onChange={handleChange} />
-            </div>
-            <button type="submit">Добавить</button>
+            <input placeholder="Вес (кг)" value={form.weightKg} onChange={e => setForm({ ...form, weightKg: e.target.value })} required />
+            <input placeholder="Шаги" value={form.steps} onChange={e => setForm({ ...form, steps: e.target.value })} required />
+            <input placeholder="Калории полученные" value={form.caloriesIn} onChange={e => setForm({ ...form, caloriesIn: e.target.value })} required />
+            <input placeholder="Калории потраченные" value={form.caloriesOut} onChange={e => setForm({ ...form, caloriesOut: e.target.value })} required />
+            <input placeholder="Заметка" value={form.note} onChange={e => setForm({ ...form, note: e.target.value })} />
+            <button type="submit">Сохранить</button>
           </form>
 
           <h2>Ваши записи</h2>
-          {entries.length === 0 ? (
-            <p>Записей пока нет.</p>
-          ) : (
+          {entries.length === 0 ? <p>Нет записей.</p> : (
             <ul>
-              {entries.map((entry, i) => (
-                <li key={i}>
-                  {new Date(entry.timestamp * 1000).toLocaleString()}: {entry.weightKg} кг, {entry.steps} шагов,
-                  калории: +{entry.caloriesIn} / -{entry.caloriesOut}, заметка: {entry.note}
+              {entries.map((entry, index) => (
+                <li key={index}>
+                  {new Date(entry.timestamp * 1000).toLocaleDateString()} — Вес: {entry.weightKg} кг, Шаги: {entry.steps}, Калории: +{entry.caloriesIn}/-{entry.caloriesOut}, Заметка: {entry.note}
                 </li>
               ))}
             </ul>
@@ -155,3 +131,5 @@ export default function App() {
     </div>
   );
 }
+
+export default App;

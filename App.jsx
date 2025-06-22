@@ -1,80 +1,58 @@
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
+import { BrowserProvider } from "ethers";
 import { ethers } from "ethers";
+import abi from "./abi.json";
 
 const contractAddress = "0xDe65B2b24558Ef18B923D31E9E6be966b9e3b0Bd";
-const abi = [
-  {
-    "inputs": [
-      { "internalType": "uint16", "name": "weightKg", "type": "uint16" },
-      { "internalType": "uint32", "name": "steps", "type": "uint32" },
-      { "internalType": "uint16", "name": "caloriesIn", "type": "uint16" },
-      { "internalType": "uint16", "name": "caloriesOut", "type": "uint16" },
-      { "internalType": "string", "name": "note", "type": "string" }
-    ],
-    "name": "addEntry",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "getMyEntries",
-    "outputs": [
-      {
-        "components": [
-          { "internalType": "uint256", "name": "timestamp", "type": "uint256" },
-          { "internalType": "uint16", "name": "weightKg", "type": "uint16" },
-          { "internalType": "uint32", "name": "steps", "type": "uint32" },
-          { "internalType": "uint16", "name": "caloriesIn", "type": "uint16" },
-          { "internalType": "uint16", "name": "caloriesOut", "type": "uint16" },
-          { "internalType": "string", "name": "note", "type": "string" }
-        ],
-        "internalType": "struct WeightLossDiary.Entry[]",
-        "name": "",
-        "type": "tuple[]"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  }
-];
 
 function App() {
-  const [account, setAccount] = useState(null);
+  const [provider, setProvider] = useState(null);
+  const [address, setAddress] = useState(null);
+  const [contract, setContract] = useState(null);
   const [entries, setEntries] = useState([]);
 
   const connectWallet = async () => {
-    if (!window.ethereum) return alert("Установите MetaMask");
-
-    const provider = new ethers.BrowserProvider(window.ethereum);
-    const signer = await provider.getSigner();
-    const address = await signer.getAddress();
-    const { chainId } = await provider.getNetwork();
-
-    if (chainId !== 8453) {
-      return alert("Пожалуйста, переключитесь на сеть Base (Chain ID 8453)");
+    if (window.ethereum) {
+      const provider = new BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      const userAddress = await signer.getAddress();
+      setProvider(provider);
+      setAddress(userAddress);
+      const c = new ethers.Contract(contractAddress, abi, signer);
+      setContract(c);
+    } else {
+      alert("Please install MetaMask");
     }
-
-    const contract = new ethers.Contract(contractAddress, abi, signer);
-    const data = await contract.getMyEntries();
-    setEntries(data);
-    setAccount(address);
   };
+
+  useEffect(() => {
+    const fetchEntries = async () => {
+      if (contract && address) {
+        try {
+          const data = await contract.getMyEntries();
+          setEntries(data);
+        } catch (err) {
+          console.error("Error fetching entries", err);
+        }
+      }
+    };
+    fetchEntries();
+  }, [contract, address]);
 
   return (
     <div>
       <h1>Weight Loss Diary</h1>
-      {!account ? (
+      {!address ? (
         <button onClick={connectWallet}>Подключить MetaMask</button>
       ) : (
         <div>
-          <p>Подключено: {account}</p>
+          <p>Wallet: {address}</p>
+          <h2>Your Entries:</h2>
           <ul>
-            {entries.map((entry, idx) => (
-              <li key={idx}>
-                {new Date(Number(entry.timestamp) * 1000).toLocaleDateString()} — Вес: {entry.weightKg} кг, Шаги: {entry.steps}, Калории: +{entry.caloriesIn} / -{entry.caloriesOut}
-                <br />
-                Заметка: {entry.note}
+            {entries.map((entry, index) => (
+              <li key={index}>
+                {new Date(Number(entry.timestamp) * 1000).toLocaleString()} —{" "}
+                {entry.weightKg} kg, {entry.steps} steps
               </li>
             ))}
           </ul>

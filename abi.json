@@ -1,0 +1,36 @@
+[
+  {
+    "inputs": [
+      { "internalType": "uint16", "name": "weightKg", "type": "uint16" },
+      { "internalType": "uint32", "name": "steps", "type": "uint32" },
+      { "internalType": "uint16", "name": "caloriesIn", "type": "uint16" },
+      { "internalType": "uint16", "name": "caloriesOut", "type": "uint16" },
+      { "internalType": "string", "name": "note", "type": "string" }
+    ],
+    "name": "addEntry",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getMyEntries",
+    "outputs": [
+      {
+        "components": [
+          { "internalType": "uint256", "name": "timestamp", "type": "uint256" },
+          { "internalType": "uint16", "name": "weightKg", "type": "uint16" },
+          { "internalType": "uint32", "name": "steps", "type": "uint32" },
+          { "internalType": "uint16", "name": "caloriesIn", "type": "uint16" },
+          { "internalType": "uint16", "name": "caloriesOut", "type": "uint16" },
+          { "internalType": "string", "name": "note", "type": "string" }
+        ],
+        "internalType": "struct WeightLossDiary.Entry[]",
+        "name": "",
+        "type": "tuple[]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  }
+]

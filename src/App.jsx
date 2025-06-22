@@ -1,111 +1,105 @@
-import { useEffect, useState } from 'react';
-import { ethers } from 'ethers';
+import { useEffect, useState } from "react";
+import { ethers } from "ethers";
+import contractABI from "./abi.json";
 
 const CONTRACT_ADDRESS = "0xDe65B2b24558Ef18B923D31E9E6be966b9e3b0Bd";
-const ABI = [
-  "function addEntry(uint16,uint32,uint16,uint16,string) external",
-  "function getMyEntries() view returns ((uint256,uint16,uint32,uint16,uint16,string)[])"
-];
 
-export default function App() {
-  const [account, setAccount] = useState(null);
-  const [diary, setDiary] = useState([]);
-  const [formData, setFormData] = useState({ weightKg: '', steps: '', caloriesIn: '', caloriesOut: '', note: '' });
+export default function Home() {
+  const [walletAddress, setWalletAddress] = useState("");
+  const [entries, setEntries] = useState([]);
+  const [form, setForm] = useState({
+    weightKg: "",
+    steps: "",
+    caloriesIn: "",
+    caloriesOut: "",
+    note: "",
+  });
 
-  useEffect(() => {
-    if (window.ethereum) {
-      window.ethereum.on('accountsChanged', ([newAccount]) => setAccount(newAccount));
-    }
-  }, []);
-
-  const connectWallet = async () => {
-    const provider = new ethers.BrowserProvider(window.ethereum);
-    const accounts = await provider.send("eth_requestAccounts", []);
-    setAccount(accounts[0]);
-    await fetchEntries(provider, accounts[0]);
+  const handleChange = (e) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
   };
 
-  const fetchEntries = async (provider, userAddress) => {
-    const signer = await provider.getSigner();
-    const contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
-    const entries = await contract.getMyEntries();
-    setDiary(entries);
+  const connectWallet = async () => {
+    if (typeof window.ethereum !== "undefined") {
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const accounts = await provider.send("eth_requestAccounts", []);
+      setWalletAddress(accounts[0]);
+    }
+  };
+
+  const fetchEntries = async () => {
+    if (!walletAddress) return;
+    try {
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      const contract = new ethers.Contract(CONTRACT_ADDRESS, contractABI, signer);
+      const data = await contract.getMyEntries();
+      setEntries(data);
+    } catch (err) {
+      console.error("Ошибка получения данных:", err);
+    }
   };
 
   const addEntry = async () => {
-    const provider = new ethers.BrowserProvider(window.ethereum);
-    const signer = await provider.getSigner();
-    const contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
-    const tx = await contract.addEntry(
-      parseInt(formData.weightKg),
-      parseInt(formData.steps),
-      parseInt(formData.caloriesIn),
-      parseInt(formData.caloriesOut),
-      formData.note
-    );
-    await tx.wait();
-    setFormData({ weightKg: '', steps: '', caloriesIn: '', caloriesOut: '', note: '' });
-    fetchEntries(provider, account);
+    try {
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      const contract = new ethers.Contract(CONTRACT_ADDRESS, contractABI, signer);
+      const tx = await contract.addEntry(
+        parseInt(form.weightKg),
+        parseInt(form.steps),
+        parseInt(form.caloriesIn),
+        parseInt(form.caloriesOut),
+        form.note
+      );
+      await tx.wait();
+      fetchEntries();
+    } catch (err) {
+      console.error("Ошибка добавления записи:", err);
+    }
   };
 
+  useEffect(() => {
+    if (walletAddress) fetchEntries();
+  }, [walletAddress]);
+
   return (
-    <div className="min-h-screen bg-gray-100 p-4 font-sans">
-      <div className="max-w-2xl mx-auto bg-white shadow-lg rounded-2xl p-6">
-        <h1 className="text-3xl font-bold text-center mb-6">Weight Loss Diary</h1>
+    <main className="p-6 max-w-xl mx-auto">
+      <h1 className="text-3xl font-bold mb-4">Weight Loss Diary</h1>
+      {walletAddress ? (
+        <div>
+          <p className="mb-4">Wallet: {walletAddress}</p>
 
-        {!account ? (
-          <button
-            className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded w-full"
-            onClick={connectWallet}
-          >
-            Подключить MetaMask
-          </button>
-        ) : (
-          <>
-            <p className="mb-4 text-center">Wallet: <span className="font-mono text-sm">{account}</span></p>
+          <div className="space-y-2 mb-4">
+            <input name="weightKg" placeholder="Вес (кг)" className="w-full border p-2" onChange={handleChange} />
+            <input name="steps" placeholder="Шаги" className="w-full border p-2" onChange={handleChange} />
+            <input name="caloriesIn" placeholder="Калории (вход)" className="w-full border p-2" onChange={handleChange} />
+            <input name="caloriesOut" placeholder="Калории (расход)" className="w-full border p-2" onChange={handleChange} />
+            <input name="note" placeholder="Комментарий" className="w-full border p-2" onChange={handleChange} />
+            <button onClick={addEntry} className="bg-blue-500 text-white px-4 py-2 rounded">Добавить запись</button>
+          </div>
 
+          <h2 className="text-2xl font-semibold mt-6 mb-2">Your Entries:</h2>
+          {entries.length === 0 ? (
+            <p>Нет записей</p>
+          ) : (
             <div className="space-y-4">
-              <input type="number" placeholder="Вес (кг)" className="input" value={formData.weightKg} onChange={(e) => setFormData({ ...formData, weightKg: e.target.value })} />
-              <input type="number" placeholder="Шаги" className="input" value={formData.steps} onChange={(e) => setFormData({ ...formData, steps: e.target.value })} />
-              <input type="number" placeholder="Калории (вход)" className="input" value={formData.caloriesIn} onChange={(e) => setFormData({ ...formData, caloriesIn: e.target.value })} />
-              <input type="number" placeholder="Калории (расход)" className="input" value={formData.caloriesOut} onChange={(e) => setFormData({ ...formData, caloriesOut: e.target.value })} />
-              <textarea placeholder="Комментарий" className="input" value={formData.note} onChange={(e) => setFormData({ ...formData, note: e.target.value })} />
-              <button onClick={addEntry} className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded w-full">Добавить запись</button>
+              {entries.map((entry, idx) => (
+                <div key={idx} className="border p-4 rounded">
+                  <p><strong>Дата:</strong> {entry.timestamp && !isNaN(entry.timestamp) ? new Intl.DateTimeFormat("ru-RU", { dateStyle: "medium", timeStyle: "short" }).format(new Date(Number(entry.timestamp) * 1000)) : "—"}</p>
+                  <p><strong>Вес:</strong> {entry.weightKg} кг</p>
+                  <p><strong>Шаги:</strong> {entry.steps}</p>
+                  <p><strong>Калории (вход):</strong> {entry.caloriesIn}</p>
+                  <p><strong>Калории (расход):</strong> {entry.caloriesOut}</p>
+                  <p><strong>Комментарий:</strong> {entry.note}</p>
+                </div>
+              ))}
             </div>
-
-            <h2 className="text-xl font-bold mt-8 mb-4">Your Entries</h2>
-            {diary.length === 0 ? (
-              <p className="text-gray-500">Нет записей</p>
-            ) : (
-              <div className="space-y-4">
-                {diary.map((entry, i) => (
-                  <div key={i} className="bg-gray-100 p-4 rounded shadow">
-                    <p><strong>Дата:</strong> {new Date(entry.timestamp * 1000).toLocaleString()}</p>
-                    <p><strong>Вес:</strong> {entry.weightKg} кг</p>
-                    <p><strong>Шаги:</strong> {entry.steps}</p>
-                    <p><strong>Калории (вход):</strong> {entry.caloriesIn}</p>
-                    <p><strong>Калории (расход):</strong> {entry.caloriesOut}</p>
-                    <p><strong>Комментарий:</strong> {entry.note}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </>
-        )}
-      </div>
-      <style jsx>{`
-        .input {
-          width: 100%;
-          padding: 0.5rem;
-          border-radius: 0.5rem;
-          border: 1px solid #ccc;
-          outline: none;
-        }
-        .input:focus {
-          border-color: #3182ce;
-          box-shadow: 0 0 0 1px #3182ce;
-        }
-      `}</style>
-    </div>
+          )}
+        </div>
+      ) : (
+        <button onClick={connectWallet} className="bg-blue-600 text-white px-4 py-2 rounded">Подключить MetaMask</button>
+      )}
+    </main>
   );
 }
